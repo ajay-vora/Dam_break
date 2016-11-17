@@ -74,6 +74,36 @@ def create_fluid_particles(dx,dy,w,h):
     
     return x,y
 
+def kernel(xi,xj,h,form):
+    q = np.abs(xi-xj)/h
+    Wij = form(q,h)
+    return Wij
+    
+def spline_kernel(q,h):
+    if q < 1.0:
+        Wij = (2/(3*h))*(1 - (1.5*q**2)*(1 - q/2))
+    elif 1.0 <= q < 2.0:
+        Wij = (1/(6*h))*(2 - q)**3
+    else:
+        Wij = 0
+        
+    return Wij
+    
+def derivative_kernel(xi,xj,h,form):
+    q = np.abs(xi-xj)/h
+    dq = (1.0/h)*np.sign(xi - xj)
+    DWij = form(q,h)*dq
+    return DWij
+    
+def der_spline(q,h):
+    if q < 1.0:
+        DWij = (1.0/h)*(1.5*q**2 - 2.0*q)
+    elif 1.0 <= q < 2.0:
+        DWij = -(0.5/h)*(2.0 - q)**2
+    else:
+        DWij = 0
+    return DWij
+
 def main():
     w_solid = 4
     h_solid = 4
@@ -83,6 +113,30 @@ def main():
     dx = 0.012
     dy = 0.012
     h = 0.039
+    
+    dt = 1e-4  #remember to check this
+    t = 3*dt
+    
+    x_fluid,y_fluid = create_fluid_particles(dx,dy,w_fluid,h_fluid)
+    x_solid,y_solid = create_solid_particles(2,dx,dy,w_solid,h_solid)
+    
+    N_solid = len(x_solid)
+    N_fluid = len(x_fluid)
+    N = N_fluid + N_solid
+    
+    x = np.concatenate((x_fluid,x_solid))
+    y = np.concatenate((y_fluid,y_solid))
+    
+    time_steps = dt/t +1
+    
+    rho = np.zeros((time_steps,N)) 
+    p = np.zeros((time_steps,N))
+    u = np.zeros((time_steps,N))
+    u = np.zeros((time_steps,N))
+    
+    rho[0] = 1000*np.ones_like(x)
+    p[0] = (1.013e5)*np.ones_like(x)
+    
     
 #main()
     
