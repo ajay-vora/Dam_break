@@ -6,6 +6,7 @@ Created on Mon Nov  7 00:29:41 2016
 """
 
 import numpy as np
+from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 
 def create_solid_particles(n,dx,dy,w,h):
@@ -74,17 +75,150 @@ def create_fluid_particles(dx,dy,w,h):
     
     return x,y
 
-def main():
-    w_solid = 4
-    h_solid = 4
-    w_fluid = 1
-    h_fluid = 2
+def kernel(xi,xj,yi,yj,h,form):
+    q = np.sqrt((xi-xj)**2 + (yi-yj)**2)/h
+    Wij = form(q,h)
+    return Wij
+    
+def spline_kernel(q,h):
+    sigma = 10/(7*np.pi*h**2)
+    if q < 1.0:
+        Wij = sigma*(1 - (1.5*q**2)*(1 - q/2))
+    elif 1.0 <= q < 2.0:
+        Wij = sigma*0.25*(2 - q)**3
+    else:
+        Wij = 0
+        
+    return Wij
+    
+def gauss_kernel(q,h):
+    if q < 3.0:
+        Wij = (1/(np.pi*h**2))*np.exp(-q**2)
+    else: 
+        Wij = 0.0
+    return Wij
+    
+def derivative_kernel(xi,xj,yi,yj,h,form):
+    r = np.sqrt((xi-xj)**2 + (yi-yj)**2)
+    q = r/h
+    dq_x = (xi - xj)/r
+    dq_y = (yi - yj)/r
+    DW_q = form(q,h)  
+    DWx_ij = DW_q*dq_x
+    DWy_ij = DW_q*dq_y
+    return DWx_ij,DWy_ij
+    
+def der_spline(q,h):
+    sigma = 10/(7*np.pi*h**2)
+    if q < 1.0:
+        DW_q = sigma*((9/4)*q**2 - 3.0*q)
+    elif 1.0 <= q < 2.0:
+        DW_q = -sigma*(3/4)*(2.0 - q)**2
+    else:
+        DW_q = 0
+    return DW_q
 
-    dx = 0.012
-    dy = 0.012
+def create_all_particles(w_solid = 4, h_solid = 4, w_fluid = 1, h_fluid = 2, \
+dx = 0.012, dy = 0.012, n_solid_layers = 2):
+    
+    x_fluid,y_fluid = create_fluid_particles(dx,dy,w_fluid,h_fluid)
+    x_solid,y_solid = create_solid_particles(n_solid_layers,dx,dy,w_solid,\
+    h_solid)
+
+    N_solid = len(x_solid)
+    N_fluid = len(x_fluid)
+    
+    x = np.concatenate((x_solid,x_fluid))
+    y = np.concatenate((y_solid,y_fluid))
+    
+    return x,y,N_solid,N_fluid
+    
+def sph_equations(m, rho, p, u, v, x, y, h, N, N_solid):
+    
+    rhs_rho = np.zeros(N)
+#    rhs_p = np.zeros(N)
+    rhs_u = np.zeros(N)
+    rhs_v = np.zeros(N)
+    xsph = np.zeros(N)
+    ysph = np.zeros(N)
+    
+    for i in range(N):
+#        v_term = np.zeros(N)
+        for j in range(N):
+            
+            Wij = kernel(x[i],x[j],y[i],y[j],h,spline_kernel)                
+            DWx_ij, DWy_ij = derivative_kernel(x[i],x[j],y[i],y[j],h,\
+            der_spline)
+            
+            rhs_rho[i] += rho[i]*(m[j]*rho[j])*((u[i]-u[j])*DWx_ij + \
+            (v[i]-v[j])*DWy_ij)
+            
+            if i not in range(N_solid): 
+                v_term = -m[j]*((p[i]/rho[i]**2) + (p[j]/rho[j]**2))
+                rhs_u[i] += v_term*DWx_ij
+                rhs_v[i] += v_term*DWy_ij + rho[i]*(-9.8)
+                
+                rho_ij = 0.5*(rho[i] + rho[j])
+                xsph = -0.5*m[j]*((u[i]-u[j])/rho_ij)*Wij
+                ysph = -0.5*m[j]*((v[i]-v[j])/rho_ij)*Wij 
+            
+    return rhs_rho,rhs_u,rhs_v,xsph,ysph
+    
+
+def main():
+    
     h = 0.039
     
-#main()
+    dt = 0.001
+    t = 2*dt
+    time_steps = int(np.ceil(t/dt + 1))
+    dx = 0.012
+    dy = 0.012
+     
+    x1,y1,N_solid,N_fluid = create_all_particles(dx = 0.012,dy = 0.012) 
+
+    N = N_solid + N_fluid
+    
+    rho = np.zeros((time_steps,N))
+    p = np.zeros((time_steps,N))
+    u = np.zeros((time_steps,N))
+    v = np.zeros((time_steps,N))
+    m = np.zeros(N)
+    x = np.zeros((time_steps,N))
+    y = np.zeros((time_steps,N))
+    
+    m[:] = rho[0,0]*dx*dy
+    rho[0] = 1000*np.ones(N)
+    p[0] = (1.013e5)*np.ones(N)
+    x[0] = x1
+    y[0] = y1
+    B = 1.013e5
+    gamma = 7
+    
+    for i in range(1,time_steps+1):
+        
+#        p = B*((rho[i]/rho[0])**gamma - 1)
+        
+        rhs_rho, rhs_u, rhs_v, xsph, ysph = sph_equations(m, rho[i-1], p[i-1],\
+        u[i-1], v[i-1], x[i], y[i], h, N, N_solid)
+        
+        rho[i] = rho[i-1] + dt*rhs_rho
+        u[i] = u[i-1] + dt*rhs_u
+        v[i] = v[i-1] + dt*rhs_v
+        x[i] = x[i-1] + dt*(u[i-1] + xsph)
+        y[i] = y[i-1] + dt*(v[i-1] + ysph)
+        p = B*((rho[i]/rho[0])**gamma - 1)
+        
+    return rho,p,u,v,x,y
+
+def plot_it(i=-1):
+    
+    rho,p,u,v,x,y = main()
+    
+    plt.figure()
+    plt.plot(x[i],y[i],".")
+    
+plot_it()
     
 def test_create_fluid_particles():
     
@@ -97,11 +231,11 @@ def test_create_fluid_particles():
     x,y = create_fluid_particles(dx,dy,w_fluid,h_fluid)
     
     plt.figure()
-    plt.xlim(0,4)
-    plt.ylim(0,4)
+    plt.xlim(0,4.5)
+    plt.ylim(0,4.5)
     plt.plot(x,y,'.')
     
-test_create_fluid_particles()
+#test_create_fluid_particles()
     
     
 def test_create_solid_particles():
@@ -121,6 +255,66 @@ def test_create_solid_particles():
     plt.ylim(0,4.5)
     plt.plot(x,y,'.')
     
-test_create_solid_particles()
+#test_create_solid_particles()
+
+def test_create_all_particles():
     
+    x,y,N_solid,N_fluid = create_all_particles()
+    
+    plt.figure()
+    plt.plot(x[0:N_solid],y[0:N_solid],'g.')
+    plt.plot(x[N_solid:],y[N_solid:],'b.')
+    
+#test_create_all_particles()
+    
+def test_kernel():
+    X,Y = np.mgrid[-4:4.0 + 1e-7:400j,-4:4.0 + 1e-7:400j]
+    n,m = X.shape
+    x = X.ravel()
+    y = Y.ravel()
+    
+    h = 2
+    z = np.zeros_like(x)
+
+    for i in range(len(x)):
+        
+        z[i] = kernel(x[i],0.0,y[i],0.0,h,spline_kernel)
+
+
+    x.shape = (n,m)
+    y.shape = (n,m)
+    z.shape = (n,m)
+    
+    fig = plt.figure()
+    ax = fig.gca(projection='3d')
+    
+    ax.plot_surface(x, y, z, rstride=10, cstride=10,linewidth=0, \
+    antialiased=False)
+    
+#    ax.set_zlim(-0.01, 0.13)
+    
+#test_kernel()
+    
+    
+def test_der_kernel():
+    x = [0.4,-0.4,0.0,0.0]
+    y = [0.0,0.0,0.4,-0.4]
+    
+    h = 2
+    
+    DWx1,DWy1 = derivative_kernel(x[0],0.0,y[0],0.0,h,der_spline)
+    assert DWx1 < 0.0
+    
+    DWx2,DWy2 = derivative_kernel(x[1],0.0,y[1],0.0,h,der_spline)
+    assert DWx2 > 0.0
+    
+    DWx3,DWy3 = derivative_kernel(x[2],0.0,y[2],0.0,h,der_spline)
+    assert DWy3 < 0.0
+    
+    DWx4,DWy4 = derivative_kernel(x[3],0.0,y[3],0.0,h,der_spline)
+    assert DWy4 > 0.0
+    
+
+#test_der_kernel()
+
     
