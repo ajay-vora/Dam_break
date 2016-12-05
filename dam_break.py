@@ -81,41 +81,57 @@ def kernel(xi,xj,yi,yj,h,form):
     return Wij
     
 def spline_kernel(q,h):
-    sigma = 10/(7*np.pi*h**2)
+    sigma = 10.0/(7.0*np.pi*h**2)
     if q < 1.0:
-        Wij = sigma*(1 - (1.5*q**2)*(1 - q/2))
+        Wij = sigma*(1.0 - (1.5*q**2)*(1.0 - q/2.0))
     elif 1.0 <= q < 2.0:
-        Wij = sigma*0.25*(2 - q)**3
+        Wij = sigma*0.25*(2.0 - q)**3
     else:
         Wij = 0
         
     return Wij
     
 def gauss_kernel(q,h):
+    sigma = (1.0/(np.pi*h**2))
     if q < 3.0:
-        Wij = (1/(np.pi*h**2))*np.exp(-q**2)
+        Wij = sigma*np.exp(-q**2)
     else: 
         Wij = 0.0
     return Wij
     
 def derivative_kernel(xi,xj,yi,yj,h,form):
     r = np.sqrt((xi-xj)**2 + (yi-yj)**2)
-    q = r/h
-    dq_x = (xi - xj)/r
-    dq_y = (yi - yj)/r
-    DW_q = form(q,h)  
-    DWx_ij = DW_q*dq_x
-    DWy_ij = DW_q*dq_y
+    
+    if r != 0.0:
+        q = r/h
+        dq_x = (xi - xj)/r
+        dq_y = (yi - yj)/r
+        DW_q = form(q,h)  
+        DWx_ij = DW_q*dq_x
+        DWy_ij = DW_q*dq_y
+        
+    else:
+        DWx_ij = 0.0
+        DWy_ij = 0.0
+        
     return DWx_ij,DWy_ij
     
 def der_spline(q,h):
-    sigma = 10/(7*np.pi*h**2)
+    sigma = 10.0/(7.0*np.pi*h**2)
     if q < 1.0:
-        DW_q = sigma*((9/4)*q**2 - 3.0*q)
+        DW_q = sigma*((9.0/4.0)*q**2 - 3.0*q)
     elif 1.0 <= q < 2.0:
-        DW_q = -sigma*(3/4)*(2.0 - q)**2
+        DW_q = -sigma*(3.0/4.0)*(2.0 - q)**2
     else:
         DW_q = 0
+    return DW_q
+    
+def der_gauss(q,h):
+    sigma = (1.0/(np.pi*h**2))
+    if q < 3.0:
+        DW_q = sigma*(-2*q)*np.exp(-q**2)
+    else: 
+        DW_q = 0.0
     return DW_q
 
 def create_all_particles(w_solid = 4, h_solid = 4, w_fluid = 1, h_fluid = 2, \
@@ -146,18 +162,18 @@ def sph_equations(m, rho, p, u, v, x, y, h, N, N_solid):
 #        v_term = np.zeros(N)
         for j in range(N):
             
-            Wij = kernel(x[i],x[j],y[i],y[j],h,spline_kernel)                
+            Wij = kernel(x[i],x[j],y[i],y[j],h,gauss_kernel)                
             DWx_ij, DWy_ij = derivative_kernel(x[i],x[j],y[i],y[j],h,\
-            der_spline)
+            der_gauss)
             
-            rhs_rho[i] += rho[i]*(m[j]*rho[j])*((u[i]-u[j])*DWx_ij + \
+            rhs_rho[i] += rho[i]*(m[j]/rho[j])*((u[i]-u[j])*DWx_ij + \
             (v[i]-v[j])*DWy_ij)
 #            
             if i not in range(N_solid): 
                 v_term = -m[j]*((p[i]/rho[i]**2) + (p[j]/rho[j]**2))
-                print v_term
+#                print v_term
                 rhs_u[i] += v_term*DWx_ij
-                rhs_v[i] += v_term*DWy_ij + rho[i]*(-9.8)
+                rhs_v[i] += v_term*DWy_ij + (-9.8)
                 
                 rho_ij = 0.5*(rho[i] + rho[j])
                 xsph = -0.5*m[j]*((u[i]-u[j])/rho_ij)*Wij
@@ -168,18 +184,13 @@ def sph_equations(m, rho, p, u, v, x, y, h, N, N_solid):
 
 def main():
     
-#    h = 0.039
+    h = 0.39
     
-    dt = 0.0001
-    t = 4*dt
+    dt = 0.004  #Courant number = 0.3 , u = 6.26 yields dt = 0.00575
+    t = 3*dt
     time_steps = int(np.ceil(t/dt + 1))
-    
-    hdx = 3.25
-    
-    dx = 0.012
-    dy = 0.012
-    
-    h = hdx*dx
+    dx = 0.12
+    dy = 0.12
      
     x1,y1,N_solid,N_fluid = create_all_particles(dx = 0.12,dy = 0.12) 
 
@@ -194,13 +205,14 @@ def main():
     x = np.zeros((time_steps,N))
     y = np.zeros((time_steps,N))
     
-    rho[0] = 1000*np.ones(N)
+#    m[:] = rho[0,0]*dx*dy
+    rho[0] = 1000.0*np.ones(N)
     m[:] = rho[0,0]*dx*dy
     p[0] = (1.013e5)*np.ones(N)
     x[0] = x1
     y[0] = y1
     B = 1.013e5
-    gamma = 7
+    gamma = 7.0
     
     for i in range(1,time_steps):
         
@@ -214,7 +226,7 @@ def main():
         v[i] = v[i-1] + dt*rhs_v
         x[i] = x[i-1] + dt*(u[i-1] + xsph)
         y[i] = y[i-1] + dt*(v[i-1] + ysph)
-        p[i] = B*((rho[i]/rho[0])**gamma - 1)
+        p[i] = B*((rho[i]/rho[0])**gamma - 1) #+ B
         
     return rho,p,u,v,x,y,N_solid
 
@@ -223,10 +235,10 @@ def plot_it(i=-1):
     rho,p,u,v,x,y,N_solid = main()
     
     plt.figure()
-    plt.plot(x[0:N_solid],y[0:N_solid],'g.')
-    plt.plot(x[N_solid:],y[N_solid:],'b.')
+    plt.plot(x[i,0:N_solid],y[i,0:N_solid],'g.')
+    plt.plot(x[i,N_solid:],y[i,N_solid:],'b.')
     
-plot_it()
+#plot_it()
     
 def test_create_fluid_particles():
     
