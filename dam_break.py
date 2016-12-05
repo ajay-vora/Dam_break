@@ -152,9 +152,10 @@ def sph_equations(m, rho, p, u, v, x, y, h, N, N_solid):
             
             rhs_rho[i] += rho[i]*(m[j]*rho[j])*((u[i]-u[j])*DWx_ij + \
             (v[i]-v[j])*DWy_ij)
-            
+#            
             if i not in range(N_solid): 
                 v_term = -m[j]*((p[i]/rho[i]**2) + (p[j]/rho[j]**2))
+                print v_term
                 rhs_u[i] += v_term*DWx_ij
                 rhs_v[i] += v_term*DWy_ij + rho[i]*(-9.8)
                 
@@ -167,17 +168,23 @@ def sph_equations(m, rho, p, u, v, x, y, h, N, N_solid):
 
 def main():
     
-    h = 0.039
+#    h = 0.039
     
-    dt = 0.001
-    t = 2*dt
+    dt = 0.0001
+    t = 4*dt
     time_steps = int(np.ceil(t/dt + 1))
+    
+    hdx = 3.25
+    
     dx = 0.012
     dy = 0.012
+    
+    h = hdx*dx
      
-    x1,y1,N_solid,N_fluid = create_all_particles(dx = 0.012,dy = 0.012) 
+    x1,y1,N_solid,N_fluid = create_all_particles(dx = 0.12,dy = 0.12) 
 
     N = N_solid + N_fluid
+#    print N
     
     rho = np.zeros((time_steps,N))
     p = np.zeros((time_steps,N))
@@ -187,36 +194,37 @@ def main():
     x = np.zeros((time_steps,N))
     y = np.zeros((time_steps,N))
     
-    m[:] = rho[0,0]*dx*dy
     rho[0] = 1000*np.ones(N)
+    m[:] = rho[0,0]*dx*dy
     p[0] = (1.013e5)*np.ones(N)
     x[0] = x1
     y[0] = y1
     B = 1.013e5
     gamma = 7
     
-    for i in range(1,time_steps+1):
+    for i in range(1,time_steps):
         
 #        p = B*((rho[i]/rho[0])**gamma - 1)
         
         rhs_rho, rhs_u, rhs_v, xsph, ysph = sph_equations(m, rho[i-1], p[i-1],\
-        u[i-1], v[i-1], x[i], y[i], h, N, N_solid)
+        u[i-1], v[i-1], x[i-1], y[i-1], h, N, N_solid)
         
         rho[i] = rho[i-1] + dt*rhs_rho
         u[i] = u[i-1] + dt*rhs_u
         v[i] = v[i-1] + dt*rhs_v
         x[i] = x[i-1] + dt*(u[i-1] + xsph)
         y[i] = y[i-1] + dt*(v[i-1] + ysph)
-        p = B*((rho[i]/rho[0])**gamma - 1)
+        p[i] = B*((rho[i]/rho[0])**gamma - 1)
         
-    return rho,p,u,v,x,y
+    return rho,p,u,v,x,y,N_solid
 
 def plot_it(i=-1):
     
-    rho,p,u,v,x,y = main()
+    rho,p,u,v,x,y,N_solid = main()
     
     plt.figure()
-    plt.plot(x[i],y[i],".")
+    plt.plot(x[0:N_solid],y[0:N_solid],'g.')
+    plt.plot(x[N_solid:],y[N_solid:],'b.')
     
 plot_it()
     
