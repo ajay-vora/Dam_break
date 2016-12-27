@@ -1,6 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-Created on Mon Nov  7 00:29:41 2016
+Created on Tue Dec  6 12:24:33 2016
+
+@author: ajay
+"""
+
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Dec  5 20:54:36 2016
 
 @author: ajay
 """
@@ -140,7 +147,7 @@ dx = 0.012, dy = 0.012, n_solid_layers = 2):
     x_fluid,y_fluid = create_fluid_particles(dx,dy,w_fluid,h_fluid)
     x_solid,y_solid = create_solid_particles(n_solid_layers,dx,dy,w_solid,\
     h_solid)
-    
+
     N_solid = len(x_solid)
     N_fluid = len(x_fluid)
     
@@ -149,7 +156,7 @@ dx = 0.012, dy = 0.012, n_solid_layers = 2):
     
     return x,y,N_solid,N_fluid
     
-def sph_equations(m, rho, p, u, v, x, y, h, N, N_solid):
+def sph_equations(m, rho, p, u, v, x, y, h, N, N_solid, r0, D):
     
     rhs_rho = np.zeros(N)
 #    rhs_p = np.zeros(N)
@@ -166,18 +173,38 @@ def sph_equations(m, rho, p, u, v, x, y, h, N, N_solid):
             DWx_ij, DWy_ij = derivative_kernel(x[i],x[j],y[i],y[j],h,\
             der_gauss)
             
-            rhs_rho[i] += rho[i]*(m[j]/rho[j])*((u[i]-u[j])*DWx_ij + \
-            (v[i]-v[j])*DWy_ij)
-#            
-            if i not in range(N_solid): 
-                v_term = -m[j]*((p[i]/rho[i]**2) + (p[j]/rho[j]**2))
+            u_ij = u[i]-u[j]
+            v_ij = v[i]-v[j]
+            
+            rhs_rho[i] += rho[i]*(m[j]/rho[j])*(u_ij*DWx_ij + v_ij*DWy_ij)
+            
+#            if i not in range(N_solid): 
+            v_term = -m[j]*((p[i]/rho[i]**2) + (p[j]/rho[j]**2))
 #                print v_term
-                rhs_u[i] += v_term*DWx_ij
-                rhs_v[i] += v_term*DWy_ij + (-9.8)
                 
-                rho_ij = 0.5*(rho[i] + rho[j])
-                xsph[i] += -0.5*m[j]*((u[i]-u[j])/rho_ij)*Wij
-                ysph[i] += -0.5*m[j]*((v[i]-v[j])/rho_ij)*Wij 
+            if j in range(N_solid):
+                x_ij = x[i] - x[j]
+                y_ij = y[i] - y[j]
+                r_ij = np.sqrt(x_ij**2 + y_ij**2)
+                
+                
+                if r_ij == 0.0:
+                    f_x = 0.0
+                    f_y = 0.0
+                elif r0/r_ij >= 1.0:
+                    f = D*((r0/r_ij)**12 - (r0/r_ij)**4)
+                    f_x = f*(x_ij/r_ij**2)
+                    f_y = f*(y_ij/r_ij**2)
+                else:                    
+                    f_x = 0.0
+                    f_y = 0.0
+                    
+            rhs_u[i] += v_term*DWx_ij + f_x
+            rhs_v[i] += v_term*DWy_ij + (-9.8) + f_y
+                
+            rho_ij = 0.5*(rho[i] + rho[j])
+            xsph[i] += -0.5*m[j]*(u_ij/rho_ij)*Wij
+            ysph[i] += -0.5*m[j]*(v_ij/rho_ij)*Wij 
             
     return rhs_rho,rhs_u,rhs_v,xsph,ysph
     
@@ -187,7 +214,7 @@ def main():
     h = 0.39
     
     dt = 0.004  #Courant number = 0.3 , u = 6.26 yields dt = 0.00575
-    t = 2*dt
+    t = 3*dt
     time_steps = int(np.ceil(t/dt + 1))
     dx = 0.12
     dy = 0.12
@@ -213,19 +240,25 @@ def main():
     B = 1.013e5
     gamma = 7.0
     
+    r0 = dx
+    D = 36.0
+    
     for i in range(1,time_steps):
         
 #        p = B*((rho[i]/rho[0])**gamma - 1)
         
         rhs_rho, rhs_u, rhs_v, xsph, ysph = sph_equations(m, rho[i-1], p[i-1],\
-        u[i-1], v[i-1], x[i-1], y[i-1], h, N, N_solid)
+        u[i-1], v[i-1], x[i-1], y[i-1], h, N, N_solid, r0, D)
         
         rho[i] = rho[i-1] + dt*rhs_rho
-        u[i] = u[i-1] + dt*rhs_u
-        v[i] = v[i-1] + dt*rhs_v
-        x[i] = x[i-1] + dt*(u[i-1] + xsph)
-        y[i] = y[i-1] + dt*(v[i-1] + ysph)
+        u[i,N_solid:] = u[i-1,N_solid:] + dt*rhs_u[N_solid:]
+        v[i,N_solid:] = v[i-1,N_solid:] + dt*rhs_v[N_solid:]
+        x[i,N_solid:] = x[i-1,N_solid:] + dt*(u[i-1,N_solid:] + xsph[N_solid:])
+        y[i,N_solid:] = y[i-1,N_solid:] + dt*(v[i-1,N_solid:] + ysph[N_solid:])
         p[i] = B*((rho[i]/rho[0])**gamma - 1) #+ B
+        
+        x[i,0:N_solid] = x1[0:N_solid]
+        y[i,0:N_solid] = y1[0:N_solid]        
         
     return rho,p,u,v,x,y,N_solid
 
@@ -237,7 +270,7 @@ def plot_it(i=-1):
     plt.plot(x[i,0:N_solid],y[i,0:N_solid],'g.')
     plt.plot(x[i,N_solid:],y[i,N_solid:],'b.')
     
-plot_it()
+#plot_it()
     
 def test_create_fluid_particles():
     
