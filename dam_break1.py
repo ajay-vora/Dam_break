@@ -157,6 +157,10 @@ def sph_equations(m, rho, p, u, v, x, y, h, N, N_solid, r0, D):
     rhs_v = np.zeros(N)
     xsph = np.zeros(N)
     ysph = np.zeros(N)
+    c0 = 62.61 #10*u_max
+    gamma1 = 0.5*(7.0 -1.0)
+    alpha = 0.01
+    beta = 0
     
     for i in range(N):
 #        v_term = 0
@@ -197,11 +201,16 @@ def sph_equations(m, rho, p, u, v, x, y, h, N, N_solid, r0, D):
                 yij = y[i] - y[j]
                 v_ijdotr_ij = u_ij*xij + v_ij*yij
                 rho_ij = 0.5*(rho[i] + rho[j])
-#               ADD ci, cj and cij
                 
                 if v_ijdotr_ij <= 0.0:
+                    
+#               ADD ci, cj and cij
+                    ci = c0*(rho[i]/1000.0)**gamma1
+                    cj = c0*(rho[j]/1000.0)**gamma1
+                    cij = 0.5*(ci + cj)
+                    
                     mu_ij = (h*v_ijdotr_ij)/(xij**2 + yij**2 + (0.1*h)**2)
-                    pi_ij = (-cij*mu_ij + mu_ij**2)/rho_ij
+                    pi_ij = (-alpha*cij*mu_ij + beta*mu_ij**2)/rho_ij
                 else:
                     pi_ij = 0.0
 #                    
@@ -222,7 +231,7 @@ def main():
     
     h = 0.39
     
-    dt = 0.004  #Courant number = 0.3 , u = 6.26 yields dt = 0.00575
+    dt = 0.004  #Courant number = 0.3 , u_max = 6.26 yields dt = 0.00575
     t = 100*dt
     time_steps = int(np.ceil(t/dt + 1))
     dx = 0.12
@@ -246,7 +255,7 @@ def main():
     p[0] = (1.013e5)*np.ones(N)
     x[0] = x1
     y[0] = y1
-    B = 1.013e5
+    B = 1.013e5#5600.0  # B = (rho_0*c_o**2) /gamma and c_0 = 10*max(u_max,np.sqrt(gL)) where is L is characterisitic vertical dimension of flow
     gamma = 7.0
     
     f_y = np.zeros(N)
