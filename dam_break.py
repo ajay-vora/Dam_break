@@ -187,7 +187,7 @@ def main():
     h = 0.39
     
     dt = 0.004  #Courant number = 0.3 , u = 6.26 yields dt = 0.00575
-    t = 3*dt
+    t = 2*dt
     time_steps = int(np.ceil(t/dt + 1))
     dx = 0.12
     dy = 0.12
@@ -195,7 +195,6 @@ def main():
     x1,y1,N_solid,N_fluid = create_all_particles(dx = 0.12,dy = 0.12) 
 
     N = N_solid + N_fluid
-#    print N
     
     rho = np.zeros((time_steps,N))
     p = np.zeros((time_steps,N))
