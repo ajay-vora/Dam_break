@@ -75,6 +75,13 @@ def create_fluid_particles(dx,dy,w,h):
     
     return x,y
 
+def create_non_stg_fluid_particles(dx,dy,w,h):
+    x,y = np.mgrid[0:w+1e-4:dx,0:h+1e-4:dy]
+    x = x.ravel()
+    y = y.ravel()
+    
+    return x,y
+
 def kernel(xi,xj,yi,yj,h,form):
     q = np.sqrt((xi-xj)**2 + (yi-yj)**2)/h
     Wij = form(q,h)
@@ -126,7 +133,7 @@ def der_spline(q,h):
         DW_q = 0
     return DW_q
     
-def der_gauss(q,h):
+def der_gauss(q,h):                    
     sigma = (1.0/(np.pi*h**2))
     if q < 3.0:
         DW_q = sigma*(-2*q)*np.exp(-q**2)
@@ -137,7 +144,7 @@ def der_gauss(q,h):
 def create_all_particles(w_solid = 4, h_solid = 4, w_fluid = 1, h_fluid = 2, \
 dx = 0.012, dy = 0.012, n_solid_layers = 2):
     
-    x_fluid,y_fluid = create_fluid_particles(dx,dy,w_fluid,h_fluid)
+    x_fluid,y_fluid = create_non_stg_fluid_particles(dx,dy,w_fluid,h_fluid)
     x_solid,y_solid = create_solid_particles(n_solid_layers,dx,dy,w_solid,\
     h_solid)
 
@@ -148,10 +155,17 @@ dx = 0.012, dy = 0.012, n_solid_layers = 2):
     y = np.concatenate((y_solid,y_fluid))
     
     return x,y,N_solid,N_fluid
+
+def hg_correction(rho):
+    index = np.where(rho < 1000.0)
+    rho[index] = 1000.0
+    
+    return rho
     
 def sph_equations(m, rho, p, u, v, x, y, h, N, N_solid, r0, D):
     
     rhs_rho = np.zeros(N)
+#    density = np.zeros(N)
 #    rhs_p = np.zeros(N)
     rhs_u = np.zeros(N)
     rhs_v = np.zeros(N)
@@ -159,7 +173,7 @@ def sph_equations(m, rho, p, u, v, x, y, h, N, N_solid, r0, D):
     ysph = np.zeros(N)
     c0 = 62.61 #10*u_max
     gamma1 = 0.5*(7.0 -1.0)
-    alpha = 0.01
+    alpha = 1
     beta = 0
     
     for i in range(N):
@@ -174,6 +188,7 @@ def sph_equations(m, rho, p, u, v, x, y, h, N, N_solid, r0, D):
             v_ij = v[i]-v[j]
             
             rhs_rho[i] += rho[i]*(m[j]/rho[j])*(u_ij*DWx_ij + v_ij*DWy_ij)
+#            density[i] += m[j]*Wij
             
             if i not in range(N_solid): 
                 v_term = -m[j]*((p[i]/rho[i]**2) + (p[j]/rho[j]**2))
@@ -225,14 +240,14 @@ def sph_equations(m, rho, p, u, v, x, y, h, N, N_solid, r0, D):
                 ysph[i] += -0.5*m[j]*(v_ij/rho_ij)*Wij 
             
     return rhs_rho,rhs_u,rhs_v,xsph,ysph
-    
+#    return density,rhs_u,rhs_v,xsph,ysph
 
-def main():
+def main(n_iter=100):
     
     h = 0.39
     
     dt = 0.004  #Courant number = 0.3 , u_max = 6.26 yields dt = 0.00575
-    t = 100*dt
+    t = n_iter*dt
     time_steps = int(np.ceil(t/dt + 1))
     dx = 0.12
     dy = 0.12
@@ -252,10 +267,10 @@ def main():
 #    m[:] = rho[0,0]*dx*dy
     rho[0] = 1000.0*np.ones(N)
     m[:] = rho[0,0]*dx*dy
-    p[0] = (1.013e5)*np.ones(N)
+    p[0] = np.ones(N)  #(1.013e5)*
     x[0] = x1
     y[0] = y1
-    B = 1.013e5#5600.0  # B = (rho_0*c_o**2) /gamma and c_0 = 10*max(u_max,np.sqrt(gL)) where is L is characterisitic vertical dimension of flow
+    B = 560000.0  #1.013e5 # B = (rho_0*c_o**2) /gamma and c_0 = 10*max(u_max,np.sqrt(gL)) where is L is characterisitic vertical dimension of flow
     gamma = 7.0
     
     f_y = np.zeros(N)
@@ -271,23 +286,30 @@ def main():
         rhs_rho, rhs_u, rhs_v, xsph, ysph = sph_equations(m, rho[i-1], p[i-1],\
         u[i-1], v[i-1], x[i-1], y[i-1], h, N, N_solid, r0, D)
         
+#        rho[i], rhs_u, rhs_v, xsph, ysph = sph_equations(m, rho[i-1], p[i-1],\
+#        u[i-1], v[i-1], x[i-1], y[i-1], h, N, N_solid, r0, D)
+        
         rho[i] = rho[i-1] + dt*rhs_rho
         u[i] = u[i-1] + dt*rhs_u
         v[i] = v[i-1] + dt*(rhs_v + f_y)
         x[i] = x[i-1] + dt*(u[i-1] + xsph)
         y[i] = y[i-1] + dt*(v[i-1] + ysph)
-        p[i] = B*((rho[i]/rho[0])**gamma - 1) #+ B
-        
+
+        rho[i] = hg_correction(rho[i])
+        p[i] = B*((rho[i]/rho[0])**gamma - 1.0) #+ B
         
     return rho,p,u,v,x,y,N_solid
-
-def plot_it(i=-1):
     
-    rho,p,u,v,x,y,N_solid = main()
-    
+def plot_res(sol, i=-1):
+    rho,p,u,v,x,y,N_solid = sol    
     plt.figure()
     plt.plot(x[i,0:N_solid],y[i,0:N_solid],'g.')
     plt.plot(x[i,N_solid:],y[i,N_solid:],'b.')
+    plt.show()
+
+def plot_it(i=-1):
+    
+    plot_res(main(), -1)
     
 #plot_it()
     
@@ -329,8 +351,8 @@ def test_create_solid_particles():
 #test_create_solid_particles()
 
 def test_create_all_particles():
-    
-    x,y,N_solid,N_fluid = create_all_particles()
+
+    x,y,N_solid,N_fluid = create_all_particles(dx = 0.12, dy = 0.12)
     
     plt.figure()
     plt.plot(x[0:N_solid],y[0:N_solid],'g.')
