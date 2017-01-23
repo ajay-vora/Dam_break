@@ -10,7 +10,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 
 
-def create_solid_particles(n,dx,dy,w,h):
+def create_stg_solid_particles(n,dx,dy,w,h):
     n1 = n/2 + n%2
     n2 = n/2
 
@@ -64,6 +64,29 @@ def create_solid_particles(n,dx,dy,w,h):
 
     return x,y
 
+def create_non_stg_solid_particles(n,dx,dy,w,h):
+
+    xmin = -n*dx
+    ymin = -n*dy
+
+    w_new = w - xmin + 1e-10
+    h_new = h - ymin + 1e-10
+
+    x,y = np.mgrid[xmin:w_new:dx,ymin:h_new:dy]
+
+    xr = np.ones_like(x)
+    yr = np.ones_like(x)
+
+    xr[n:-n,n:] = 0
+    yr[n:-n,n:] = 0
+
+    xr = np.array(xr,dtype = bool)
+    yr = np.array(yr,dtype = bool)
+
+    x = x[xr]
+    y = y[yr]
+
+    return x,y
 
 def create_stg_fluid_particles(dx,dy,w,h):
     x1,y1 = np.mgrid[0:w+1e-4:dx,0:h+1e-4:dy]
@@ -153,13 +176,13 @@ def der_gauss(q,h):
     return DW_q
 
 
-def create_all_particles(n_solid_layers = 4, dx = 0.012, dy = 0.012,
+def create_all_particles(n_solid_layers = 3, dx = 0.012, dy = 0.012,
                          w_solid = 4.0, h_solid = 4.0,w_fluid = 1.0,
                          h_fluid = 2.0):
 
     x_fluid,y_fluid = create_non_stg_fluid_particles(dx,dy,w_fluid,h_fluid)
-    x_solid,y_solid = create_solid_particles(n_solid_layers,dx,dy,w_solid,
-                                             h_solid)
+    x_solid,y_solid = create_non_stg_solid_particles(n_solid_layers,dx,dy,
+                                                     w_solid,h_solid)
 
     N_solid = len(x_solid)
     N_fluid = len(x_fluid)
@@ -345,13 +368,13 @@ def test_create_fluid_particles(dx = 0.12,dy = 0.12,w_fluid = 1.0,
     x1,y1 = create_non_stg_fluid_particles(dx,dy,w_fluid,h_fluid)
 
     plt.figure()
-    plt.xlim(0,4.5)
-    plt.ylim(0,4.5)
+    plt.xlim(-0.5,4.5)
+    plt.ylim(-0.5,4.5)
     plt.plot(x,y,'.')
 
     plt.figure()
-    plt.xlim(0,4.5)
-    plt.ylim(0,4.5)
+    plt.xlim(-0.5,4.5)
+    plt.ylim(-0.5,4.5)
     plt.plot(x1,y1,'.')
 #test_create_fluid_particles()
 
@@ -360,14 +383,16 @@ def test_create_fluid_particles(dx = 0.12,dy = 0.12,w_fluid = 1.0,
 def test_create_solid_particles(n=3, dx = 0.12, dy = 0.12, w_solid = 4.0,
                                 h_solid = 4.0):
 
-    x,y = create_solid_particles(n,dx,dy,w_solid,h_solid)
-    print len(x)
-    print len(y)
+    x,y = create_stg_solid_particles(n,dx,dy,w_solid,h_solid)
+    x1,y1 = create_non_stg_solid_particles(n,dx,dy,w_solid,h_solid)
+#    print len(x)
+#    print len(y)
 
-#    plt.figure()
-    plt.xlim(0,4.5)
-    plt.ylim(0,4.5)
+    plt.figure()
     plt.plot(x,y,'.')
+
+    plt.figure()
+    plt.plot(x1,y1,'.')
 
 #test_create_solid_particles()
 
