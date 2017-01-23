@@ -151,7 +151,8 @@ dx = 0.012, dy = 0.012, n_solid_layers = 2):
     
 def sph_equations(m, rho, p, u, v, x, y, h, N, N_solid, r0, D):
     
-    rhs_rho = np.zeros(N)
+#    rhs_rho = np.zeros(N)   # Use with continuity equation
+    density = np.zeros(N)    # Use with summation density
 #    rhs_p = np.zeros(N)
     rhs_u = np.zeros(N)
     rhs_v = np.zeros(N)
@@ -159,7 +160,7 @@ def sph_equations(m, rho, p, u, v, x, y, h, N, N_solid, r0, D):
     ysph = np.zeros(N)
     c0 = 62.61 #10*u_max
     gamma1 = 0.5*(7.0 -1.0)
-    alpha = 0.01
+    alpha = 1
     beta = 0
     
     for i in range(N):
@@ -173,7 +174,8 @@ def sph_equations(m, rho, p, u, v, x, y, h, N, N_solid, r0, D):
             u_ij = u[i]-u[j]
             v_ij = v[i]-v[j]
             
-            rhs_rho[i] += rho[i]*(m[j]/rho[j])*(u_ij*DWx_ij + v_ij*DWy_ij)
+#            rhs_rho[i] += rho[i]*(m[j]/rho[j])*(u_ij*DWx_ij + v_ij*DWy_ij) # Use with continuity equation
+            density[i] += m[j]*Wij      # Use with summation density
             
             if i not in range(N_solid): 
                 v_term = -m[j]*((p[i]/rho[i]**2) + (p[j]/rho[j]**2))
@@ -223,8 +225,9 @@ def sph_equations(m, rho, p, u, v, x, y, h, N, N_solid, r0, D):
 #                rho_ij = 0.5*(rho[i] + rho[j])
                 xsph[i] += -0.5*m[j]*(u_ij/rho_ij)*Wij
                 ysph[i] += -0.5*m[j]*(v_ij/rho_ij)*Wij 
-            
-    return rhs_rho,rhs_u,rhs_v,xsph,ysph
+    
+    return density,rhs_u,rhs_v,xsph,ysph     # Use with summation density       
+#    return rhs_rho,rhs_u,rhs_v,xsph,ysph     # Use with continuity equation
     
 
 def main():
@@ -255,7 +258,7 @@ def main():
     p[0] = (1.013e5)*np.ones(N)
     x[0] = x1
     y[0] = y1
-    B = 1.013e5#5600.0  # B = (rho_0*c_o**2) /gamma and c_0 = 10*max(u_max,np.sqrt(gL)) where is L is characterisitic vertical dimension of flow
+    B = 560000.0 #1.013e5 # B = (rho_0*c_o**2) /gamma and c_0 = 10*max(u_max,np.sqrt(gL)) where is L is characterisitic vertical dimension of flow
     gamma = 7.0
     
     f_y = np.zeros(N)
@@ -268,10 +271,13 @@ def main():
         
 #        p = B*((rho[i]/rho[0])**gamma - 1)
         
-        rhs_rho, rhs_u, rhs_v, xsph, ysph = sph_equations(m, rho[i-1], p[i-1],\
-        u[i-1], v[i-1], x[i-1], y[i-1], h, N, N_solid, r0, D)
+#        rhs_rho, rhs_u, rhs_v, xsph, ysph = sph_equations(m, rho[i-1], p[i-1],\
+#        u[i-1], v[i-1], x[i-1], y[i-1], h, N, N_solid, r0, D)   # Use with continuity equation
         
-        rho[i] = rho[i-1] + dt*rhs_rho
+        rho[i], rhs_u, rhs_v, xsph, ysph = sph_equations(m, rho[i-1], p[i-1],\
+        u[i-1], v[i-1], x[i-1], y[i-1], h, N, N_solid, r0, D)   # Use with summation density
+        
+#        rho[i] = rho[i-1] + dt*rhs_rho
         u[i] = u[i-1] + dt*rhs_u
         v[i] = v[i-1] + dt*(rhs_v + f_y)
         x[i] = x[i-1] + dt*(u[i-1] + xsph)
@@ -296,8 +302,8 @@ def test_create_fluid_particles():
     w_fluid = 1
     h_fluid = 2
 
-    dx = 0.012
-    dy = 0.012
+    dx = 0.12
+    dy = 0.12
     
     x,y = create_fluid_particles(dx,dy,w_fluid,h_fluid)
     
@@ -314,8 +320,8 @@ def test_create_solid_particles():
     w_solid = 4
     h_solid = 4
 
-    dx = 0.012
-    dy = 0.012
+    dx = 0.12
+    dy = 0.12
     
     x,y = create_solid_particles(2,dx,dy,w_solid,h_solid)
     print len(x)
@@ -330,7 +336,7 @@ def test_create_solid_particles():
 
 def test_create_all_particles():
     
-    x,y,N_solid,N_fluid = create_all_particles()
+    x,y,N_solid,N_fluid = create_all_particles(dx = 0.12, dy = 0.12)
     
     plt.figure()
     plt.plot(x[0:N_solid],y[0:N_solid],'g.')
@@ -338,7 +344,7 @@ def test_create_all_particles():
     
 #test_create_all_particles()
     
-def test_kernel():
+def test_kernel(form): # form = "spline_kernel" or "gauss_kernel" 
     X,Y = np.mgrid[-4:4.0 + 1e-7:400j,-4:4.0 + 1e-7:400j]
     n,m = X.shape
     x = X.ravel()
@@ -349,7 +355,7 @@ def test_kernel():
 
     for i in range(len(x)):
         
-        z[i] = kernel(x[i],0.0,y[i],0.0,h,spline_kernel)
+        z[i] = kernel(x[i],0.0,y[i],0.0,h,form)
 
 
     x.shape = (n,m)
@@ -367,22 +373,22 @@ def test_kernel():
 #test_kernel()
     
     
-def test_der_kernel():
+def test_der_kernel(form): # form = "der_spline" or "der_gauss"
     x = [0.4,-0.4,0.0,0.0]
     y = [0.0,0.0,0.4,-0.4]
     
     h = 2
     
-    DWx1,DWy1 = derivative_kernel(x[0],0.0,y[0],0.0,h,der_spline)
+    DWx1,DWy1 = derivative_kernel(x[0],0.0,y[0],0.0,h,form)
     assert DWx1 < 0.0
     
-    DWx2,DWy2 = derivative_kernel(x[1],0.0,y[1],0.0,h,der_spline)
+    DWx2,DWy2 = derivative_kernel(x[1],0.0,y[1],0.0,h,form)
     assert DWx2 > 0.0
     
-    DWx3,DWy3 = derivative_kernel(x[2],0.0,y[2],0.0,h,der_spline)
+    DWx3,DWy3 = derivative_kernel(x[2],0.0,y[2],0.0,h,form)
     assert DWy3 < 0.0
     
-    DWx4,DWy4 = derivative_kernel(x[3],0.0,y[3],0.0,h,der_spline)
+    DWx4,DWy4 = derivative_kernel(x[3],0.0,y[3],0.0,h,form)
     assert DWy4 > 0.0
     
 
