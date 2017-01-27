@@ -180,8 +180,8 @@ def create_all_particles(n_solid_layers = 3, dx = 0.012, dy = 0.012,
                          w_solid = 4.0, h_solid = 4.0,w_fluid = 1.0,
                          h_fluid = 2.0):
 
-    x_fluid,y_fluid = create_non_stg_fluid_particles(dx,dy,w_fluid,h_fluid)
-    x_solid,y_solid = create_non_stg_solid_particles(n_solid_layers,dx,dy,
+    x_fluid,y_fluid = create_stg_fluid_particles(dx,dy,w_fluid,h_fluid)
+    x_solid,y_solid = create_stg_solid_particles(n_solid_layers,dx,dy,
                                                      w_solid,h_solid)
 
     N_solid = len(x_solid)
@@ -202,10 +202,9 @@ def hg_correction(rho):
 
 def sph_equations(m, rho, p, u, v, x, y, h, N, N_solid, r0, D):
     
-#    rhs_rho = np.zeros(N)   # Use with continuity equation
-    density = np.zeros(N)    # Use with summation density
+    rhs_rho = np.zeros(N)   # Use with continuity equation
+#    density = np.zeros(N)    # Use with summation density
 
-#    rhs_p = np.zeros(N)
     rhs_u = np.zeros(N)
     rhs_v = np.zeros(N)
     xsph = np.zeros(N)
@@ -226,8 +225,8 @@ def sph_equations(m, rho, p, u, v, x, y, h, N, N_solid, r0, D):
             u_ij = u[i]-u[j]
             v_ij = v[i]-v[j]
 
-#            rhs_rho[i] += rho[i]*(m[j]/rho[j])*(u_ij*DWx_ij + v_ij*DWy_ij) # Use with continuity equation
-            density[i] += m[j]*Wij      # Use with summation density
+            rhs_rho[i] += rho[i]*(m[j]/rho[j])*(u_ij*DWx_ij + v_ij*DWy_ij) # Use with continuity equation
+#            density[i] += m[j]*Wij      # Use with summation density
             
             if i not in range(N_solid): 
                 
@@ -275,12 +274,11 @@ def sph_equations(m, rho, p, u, v, x, y, h, N, N_solid, r0, D):
                 rhs_v[i] += (v_term - m[j]*pi_ij)*DWy_ij  #+ f_y
 #                print f_y
 
-#                rho_ij = 0.5*(rho[i] + rho[j])
                 xsph[i] += -0.5*m[j]*(u_ij/rho_ij)*Wij
                 ysph[i] += -0.5*m[j]*(v_ij/rho_ij)*Wij 
     
-    return density,rhs_u,rhs_v,xsph,ysph     # Use with summation density       
-#    return rhs_rho,rhs_u,rhs_v,xsph,ysph     # Use with continuity equation
+#    return density,rhs_u,rhs_v,xsph,ysph     # Use with summation density       
+    return rhs_rho,rhs_u,rhs_v,xsph,ysph     # Use with continuity equation
 
 
 def main(n_iter=100):
@@ -307,7 +305,7 @@ def main(n_iter=100):
 
 #    m[:] = rho[0,0]*dx*dy
     rho[0] = 1000.0*np.ones(N)
-    m[:] = rho[0,0]*dx*dy
+    m[:] = rho[0,0]*0.5*dx*0.5*dy
     p[0] = np.ones(N)  #(1.013e5)*
     x[0] = x1
     y[0] = y1
