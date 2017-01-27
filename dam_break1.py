@@ -173,14 +173,23 @@ def der_gauss(q,h):
         DW_q = 0.0
     return DW_q
 
-
+def correction_solid_particles(x_solid,y_solid,dx,dy,n_dx=0.0,n_dy=0.0):
+    
+    x_solid[:] = x_solid[:] - n_dx*dx
+    y_solid[:] = y_solid[:] - n_dx*dx
+    
+    return x_solid,y_solid
+    
 def create_all_particles(n_solid_layers = 3, dx = 0.012, dy = 0.012,
                          w_solid = 4.0, h_solid = 4.0,w_fluid = 1.0,
-                         h_fluid = 2.0):
+                         h_fluid = 2.0,n_dx = 0.0,n_dy = 0.0):
                              
     x_fluid,y_fluid = create_non_stg_fluid_particles(dx,dy,w_fluid,h_fluid)
     x_solid,y_solid = create_stg_solid_particles(n_solid_layers,dx,dy,
                                                      w_solid,h_solid)
+                                                     
+    x_solid,y_solid = correction_solid_particles(x_solid,y_solid,dx,dy,n_dx,
+                                                 n_dy)
 
     N_solid = len(x_solid)
     N_fluid = len(x_fluid)
@@ -395,10 +404,11 @@ def test_create_solid_particles(n=3, dx = 0.12, dy = 0.12, w_solid = 4.0,
 
 
 def test_create_all_particles(n=3, dx = 0.12, dy = 0.12, w_solid = 4.0,
-                              h_solid = 4.0, w_fluid = 1.0, h_fluid = 2.0):
+                              h_solid = 4.0, w_fluid = 1.0, h_fluid = 2.0, n_dx
+                               = 0.0, n_dy = 0.0):
 
     x,y,N_solid,N_fluid = create_all_particles(n,dx,dy,w_solid,h_solid,
-                                               w_fluid,h_fluid)
+                                               w_fluid,h_fluid,n_dx,n_dy)
 
     plt.figure()
     plt.plot(x[0:N_solid],y[0:N_solid],'g.')
