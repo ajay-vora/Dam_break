@@ -181,7 +181,10 @@ def create_all_particles(n_solid_layers = 3, dx = 0.012, dy = 0.012,
     x_fluid,y_fluid = create_non_stg_fluid_particles(dx,dy,w_fluid,h_fluid)
     x_solid,y_solid = create_stg_solid_particles(n_solid_layers,dx,dy,
                                                      w_solid,h_solid)
-
+                                                     
+    x_solid[:] = x_solid[:] - 0.5*dx #to be used with non_stg_fluid, solid_stg
+    y_solid[:] = y_solid[:] - 0.5*dy #to be used with non_stg_fluid, solid_stg
+    
     N_solid = len(x_solid)
     N_fluid = len(x_fluid)
 
