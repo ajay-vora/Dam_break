@@ -173,18 +173,24 @@ def der_gauss(q,h):
         DW_q = 0.0
     return DW_q
 
-
+def correction_solid_particles(x_solid,y_solid,dx,dy,n_dx=0.0,n_dy=0.0):
+    
+    x_solid[:] = x_solid[:] - n_dx*dx
+    y_solid[:] = y_solid[:] - n_dx*dx
+    
+    return x_solid,y_solid
+    
 def create_all_particles(n_solid_layers = 3, dx = 0.012, dy = 0.012,
                          w_solid = 4.0, h_solid = 4.0,w_fluid = 1.0,
-                         h_fluid = 2.0):
-
+                         h_fluid = 2.0,n_dx = 0.0,n_dy = 0.0):
+                             
     x_fluid,y_fluid = create_non_stg_fluid_particles(dx,dy,w_fluid,h_fluid)
     x_solid,y_solid = create_stg_solid_particles(n_solid_layers,dx,dy,
                                                      w_solid,h_solid)
                                                      
-    x_solid[:] = x_solid[:] - 0.5*dx #to be used with non_stg_fluid, solid_stg
-    y_solid[:] = y_solid[:] - 0.5*dy #to be used with non_stg_fluid, solid_stg
-    
+    x_solid,y_solid = correction_solid_particles(x_solid,y_solid,dx,dy,n_dx,
+                                                 n_dy)
+
     N_solid = len(x_solid)
     N_fluid = len(x_fluid)
 
@@ -202,10 +208,10 @@ def hg_correction(rho):
 
 
 def sph_equations(m, rho, p, u, v, x, y, h, N, N_solid, r0, D):
+    
+    rhs_rho = np.zeros(N)   # Use with continuity equation
+#    density = np.zeros(N)    # Use with summation density
 
-    rhs_rho = np.zeros(N)
-#    density = np.zeros(N)
-#    rhs_p = np.zeros(N)
     rhs_u = np.zeros(N)
     rhs_v = np.zeros(N)
     xsph = np.zeros(N)
@@ -226,10 +232,11 @@ def sph_equations(m, rho, p, u, v, x, y, h, N, N_solid, r0, D):
             u_ij = u[i]-u[j]
             v_ij = v[i]-v[j]
 
-            rhs_rho[i] += rho[i]*(m[j]/rho[j])*(u_ij*DWx_ij + v_ij*DWy_ij)
-#            density[i] += m[j]*Wij
-
-            if i not in range(N_solid):
+            rhs_rho[i] += rho[i]*(m[j]/rho[j])*(u_ij*DWx_ij + v_ij*DWy_ij) # Use with continuity equation
+#            density[i] += m[j]*Wij      # Use with summation density
+            
+            if i not in range(N_solid): 
+                
                 v_term = -m[j]*((p[i]/rho[i]**2) + (p[j]/rho[j]**2))
 #                print v_term
 
@@ -274,12 +281,11 @@ def sph_equations(m, rho, p, u, v, x, y, h, N, N_solid, r0, D):
                 rhs_v[i] += (v_term - m[j]*pi_ij)*DWy_ij  #+ f_y
 #                print f_y
 
-#                rho_ij = 0.5*(rho[i] + rho[j])
                 xsph[i] += -0.5*m[j]*(u_ij/rho_ij)*Wij
-                ysph[i] += -0.5*m[j]*(v_ij/rho_ij)*Wij
-
-    return rhs_rho,rhs_u,rhs_v,xsph,ysph
-#    return density,rhs_u,rhs_v,xsph,ysph
+                ysph[i] += -0.5*m[j]*(v_ij/rho_ij)*Wij 
+    
+#    return density,rhs_u,rhs_v,xsph,ysph     # Use with summation density       
+    return rhs_rho,rhs_u,rhs_v,xsph,ysph     # Use with continuity equation
 
 
 def main(n_iter=100):
@@ -306,7 +312,7 @@ def main(n_iter=100):
 
 #    m[:] = rho[0,0]*dx*dy
     rho[0] = 1000.0*np.ones(N)
-    m[:] = rho[0,0]*dx*dy
+    m[:] = rho[0,0]*0.5*dx*0.5*dy
     p[0] = np.ones(N)  #(1.013e5)*
     x[0] = x1
     y[0] = y1
@@ -380,7 +386,6 @@ def test_create_fluid_particles(dx = 0.12,dy = 0.12,w_fluid = 1.0,
 #test_create_fluid_particles()
 
 
-
 def test_create_solid_particles(n=3, dx = 0.12, dy = 0.12, w_solid = 4.0,
                                 h_solid = 4.0):
 
@@ -399,19 +404,20 @@ def test_create_solid_particles(n=3, dx = 0.12, dy = 0.12, w_solid = 4.0,
 
 
 def test_create_all_particles(n=3, dx = 0.12, dy = 0.12, w_solid = 4.0,
-                              h_solid = 4.0, w_fluid = 1.0, h_fluid = 2.0):
+                              h_solid = 4.0, w_fluid = 1.0, h_fluid = 2.0, n_dx
+                               = 0.0, n_dy = 0.0):
 
     x,y,N_solid,N_fluid = create_all_particles(n,dx,dy,w_solid,h_solid,
-                                               w_fluid,h_fluid)
+                                               w_fluid,h_fluid,n_dx,n_dy)
 
     plt.figure()
     plt.plot(x[0:N_solid],y[0:N_solid],'g.')
     plt.plot(x[N_solid:],y[N_solid:],'b.')
 
 #test_create_all_particles()
+    
+def test_kernel(form): # form = "spline_kernel" or "gauss_kernel" 
 
-
-def test_kernel():
     X,Y = np.mgrid[-4:4.0 + 1e-7:400j,-4:4.0 + 1e-7:400j]
     n,m = X.shape
     x = X.ravel()
@@ -421,8 +427,8 @@ def test_kernel():
     z = np.zeros_like(x)
 
     for i in range(len(x)):
-
-        z[i] = kernel(x[i],0.0,y[i],0.0,h,spline_kernel)
+        
+        z[i] = kernel(x[i],0.0,y[i],0.0,h,form)
 
 
     x.shape = (n,m)
@@ -438,24 +444,25 @@ def test_kernel():
 #    ax.set_zlim(-0.01, 0.13)
 
 #test_kernel()
+    
+    
+def test_der_kernel(form): # form = "der_spline" or "der_gauss"
 
-
-def test_der_kernel():
     x = [0.4,-0.4,0.0,0.0]
     y = [0.0,0.0,0.4,-0.4]
 
     h = 2
-
-    DWx1,DWy1 = derivative_kernel(x[0],0.0,y[0],0.0,h,der_spline)
+    
+    DWx1,DWy1 = derivative_kernel(x[0],0.0,y[0],0.0,h,form)
     assert DWx1 < 0.0
-
-    DWx2,DWy2 = derivative_kernel(x[1],0.0,y[1],0.0,h,der_spline)
+    
+    DWx2,DWy2 = derivative_kernel(x[1],0.0,y[1],0.0,h,form)
     assert DWx2 > 0.0
-
-    DWx3,DWy3 = derivative_kernel(x[2],0.0,y[2],0.0,h,der_spline)
+    
+    DWx3,DWy3 = derivative_kernel(x[2],0.0,y[2],0.0,h,form)
     assert DWy3 < 0.0
-
-    DWx4,DWy4 = derivative_kernel(x[3],0.0,y[3],0.0,h,der_spline)
+    
+    DWx4,DWy4 = derivative_kernel(x[3],0.0,y[3],0.0,h,form)
     assert DWy4 > 0.0
 
 
