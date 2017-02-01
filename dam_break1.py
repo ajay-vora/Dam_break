@@ -8,7 +8,7 @@ Created on Mon Dec  5 20:54:36 2016
 import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
-
+import pdb
 
 def create_stg_solid_particles(n,dx,dy,w,h):
     n1 = n/2 + n%2
@@ -185,9 +185,9 @@ def create_all_particles(n_solid_layers = 3, dx_solid = 0.006,
                          w_solid = 4.0, h_solid = 4.0,w_fluid = 1.0,
                          h_fluid = 2.0,n_dx = 0.0,n_dy = 0.0):
                              
-    x_fluid,y_fluid = create_non_stg_fluid_particles(dx_fluid,dy_fluid,
+    x_fluid,y_fluid = create_stg_fluid_particles(dx_fluid,dy_fluid,
                                                      w_fluid,h_fluid)
-    x_solid,y_solid = create_non_stg_solid_particles(n_solid_layers,dx_solid,
+    x_solid,y_solid = create_stg_solid_particles(n_solid_layers,dx_solid,
                                                      dy_solid,w_solid,h_solid)
                                                      
     x_solid,y_solid = correction_solid_particles(x_solid,y_solid,dx_solid,
@@ -293,6 +293,8 @@ def sph_equations(m, rho, p, u, v, x, y, h, N, N_solid, r0, D):
 def main(n_iter=100, n=3, dx_solid = 0.06, dy_solid = 0.06, dx_fluid = 0.12, 
          dy_fluid = 0.12, w_solid = 4.0, h_solid = 4.0, w_fluid = 1.0, 
          h_fluid = 2.0, n_dx = 0.0, n_dy = 0.0):
+             
+#    pdb.set_trace()
 
     dt = 0.004  #Courant number = 0.3 , u_max = 6.26 yields dt = 0.00575
     t = n_iter*dt
@@ -316,7 +318,7 @@ def main(n_iter=100, n=3, dx_solid = 0.06, dy_solid = 0.06, dx_fluid = 0.12,
     y = np.zeros((time_steps,N))
 
 #    rho[0] = 1000.0*np.ones(N)
-    rho[0,:N_solid] = (dx_fluid/dx_solid)*(dy_fluid/dy_solid)*1000.0*np.ones(N_solid)
+    rho[0,:N_solid] = 1000.0*np.ones(N_solid)
     rho[0,N_solid:] = 1000.0*np.ones(N_fluid)
     m[:N_solid] = rho[0,0]*dx_solid*dy_solid
     m[N_solid:] = rho[0,-1]*dx_fluid*dy_fluid
@@ -328,6 +330,8 @@ def main(n_iter=100, n=3, dx_solid = 0.06, dy_solid = 0.06, dx_fluid = 0.12,
 #                            characterisitic vertical dimension of flow
     gamma = 7.0
 
+#    pdb.set_trace()
+
     f_y = np.zeros(N)
     f_y[N_solid:] = -9.8*np.ones(N_fluid)
 
@@ -335,6 +339,7 @@ def main(n_iter=100, n=3, dx_solid = 0.06, dy_solid = 0.06, dx_fluid = 0.12,
     D = 36.0
 
     for i in range(1,time_steps):
+        print i,
 
 #        p = B*((rho[i]/rho[0])**gamma - 1)
 
@@ -347,15 +352,16 @@ def main(n_iter=100, n=3, dx_solid = 0.06, dy_solid = 0.06, dx_fluid = 0.12,
 #                                                         u[i-1], v[i-1],
 #                                                         x[i-1], y[i-1], h, N,
 #                                                         N_solid, r0, D)
-
+        #print rhs_rho
         rho[i] = rho[i-1] + dt*rhs_rho
         u[i] = u[i-1] + dt*rhs_u
         v[i] = v[i-1] + dt*(rhs_v + f_y)
         x[i] = x[i-1] + dt*(u[i-1] + xsph)
         y[i] = y[i-1] + dt*(v[i-1] + ysph)
 
-        rho[i] = hg_correction(rho[i])
+        rho[i][:N_solid] = hg_correction(rho[i][:N_solid])
         p[i] = B*((rho[i]/rho[0])**gamma - 1.0) #+ B
+        print "\r",
 
     return rho,p,u,v,x,y,N_solid
 
@@ -367,6 +373,37 @@ def plot_res(sol, i=-1):
     plt.plot(x[i,N_solid:],y[i,N_solid:],'b.')
     plt.show()
 
+def plot_res_contour(sol, i=-1):
+    
+    rho,p,u,v,x,y,N_solid = sol
+    
+    plt.figure()
+    plt.scatter(x[i], y[i], c=rho[i])
+    plt.title('Density_plot')
+    plt.colorbar()
+    
+    #plt.figure()
+    #plt.scatter(x[i], y[i], c=p[i])
+    #plt.title('Pressure_plot')
+    #plt.colorbar()
+    
+    plt.show()
+    
+def plot_res_contour1(sol, i=-1):
+    
+    rho,p,u,v,x,y,N_solid = sol
+    
+    plt.figure()
+    plt.scatter(x[i], y[i], c=u[i])
+    plt.title('U_plot')
+    plt.colorbar()
+    
+    plt.figure()
+    plt.scatter(x[i], y[i], c=v[i])
+    plt.title('V_plot')
+    plt.colorbar()
+    
+    plt.show()
 
 def plot_it(i=-1):
 
