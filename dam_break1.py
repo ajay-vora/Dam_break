@@ -180,16 +180,18 @@ def correction_solid_particles(x_solid,y_solid,dx,dy,n_dx=0.0,n_dy=0.0):
     
     return x_solid,y_solid
     
-def create_all_particles(n_solid_layers = 3, dx = 0.012, dy = 0.012,
+def create_all_particles(n_solid_layers = 3, dx_solid = 0.006, 
+                         dy_solid = 0.006, dx_fluid = 0.012, dy_fluid = 0.012,
                          w_solid = 4.0, h_solid = 4.0,w_fluid = 1.0,
                          h_fluid = 2.0,n_dx = 0.0,n_dy = 0.0):
                              
-    x_fluid,y_fluid = create_non_stg_fluid_particles(dx,dy,w_fluid,h_fluid)
-    x_solid,y_solid = create_stg_solid_particles(n_solid_layers,dx,dy,
-                                                     w_solid,h_solid)
+    x_fluid,y_fluid = create_non_stg_fluid_particles(dx_fluid,dy_fluid,
+                                                     w_fluid,h_fluid)
+    x_solid,y_solid = create_non_stg_solid_particles(n_solid_layers,dx_solid,
+                                                     dy_solid,w_solid,h_solid)
                                                      
-    x_solid,y_solid = correction_solid_particles(x_solid,y_solid,dx,dy,n_dx,
-                                                 n_dy)
+    x_solid,y_solid = correction_solid_particles(x_solid,y_solid,dx_solid,
+                                                 dy_solid,n_dx,n_dy)
 
     N_solid = len(x_solid)
     N_fluid = len(x_fluid)
@@ -288,17 +290,20 @@ def sph_equations(m, rho, p, u, v, x, y, h, N, N_solid, r0, D):
     return rhs_rho,rhs_u,rhs_v,xsph,ysph     # Use with continuity equation
 
 
-def main(n_iter=100):
-
-    h = 0.39
+def main(n_iter=100, n=3, dx_solid = 0.06, dy_solid = 0.06, dx_fluid = 0.12, 
+         dy_fluid = 0.12, w_solid = 4.0, h_solid = 4.0, w_fluid = 1.0, 
+         h_fluid = 2.0, n_dx = 0.0, n_dy = 0.0):
 
     dt = 0.004  #Courant number = 0.3 , u_max = 6.26 yields dt = 0.00575
     t = n_iter*dt
     time_steps = int(np.ceil(t/dt + 1))
-    dx = 0.12
-    dy = 0.12
+    
+    h = 3.25*max(dx_fluid,dy_fluid)
 
-    x1,y1,N_solid,N_fluid = create_all_particles(dx = 0.12,dy = 0.12)
+    x1,y1,N_solid,N_fluid = create_all_particles(n, dx_solid, dy_solid, 
+                                                 dx_fluid, dy_fluid, w_solid, 
+                                                 h_solid, w_fluid, h_fluid,
+                                                 n_dx, n_dy)
 
     N = N_solid + N_fluid
 
@@ -310,9 +315,11 @@ def main(n_iter=100):
     x = np.zeros((time_steps,N))
     y = np.zeros((time_steps,N))
 
-#    m[:] = rho[0,0]*dx*dy
-    rho[0] = 1000.0*np.ones(N)
-    m[:] = rho[0,0]*0.5*dx*0.5*dy
+#    rho[0] = 1000.0*np.ones(N)
+    rho[0,:N_solid] = (dx_fluid/dx_solid)*(dy_fluid/dy_solid)*1000.0*np.ones(N_solid)
+    rho[0,N_solid:] = 1000.0*np.ones(N_fluid)
+    m[:N_solid] = rho[0,0]*dx_solid*dy_solid
+    m[N_solid:] = rho[0,-1]*dx_fluid*dy_fluid
     p[0] = np.ones(N)  #(1.013e5)*
     x[0] = x1
     y[0] = y1
@@ -324,7 +331,7 @@ def main(n_iter=100):
     f_y = np.zeros(N)
     f_y[N_solid:] = -9.8*np.ones(N_fluid)
 
-    r0 = dx
+    r0 = dx_fluid
     D = 36.0
 
     for i in range(1,time_steps):
@@ -386,11 +393,11 @@ def test_create_fluid_particles(dx = 0.12,dy = 0.12,w_fluid = 1.0,
 #test_create_fluid_particles()
 
 
-def test_create_solid_particles(n=3, dx = 0.12, dy = 0.12, w_solid = 4.0,
-                                h_solid = 4.0):
+def test_create_solid_particles(n=3, dx_solid = 0.12, dy_solid = 0.12, 
+                                w_solid = 4.0, h_solid = 4.0):
 
-    x,y = create_stg_solid_particles(n,dx,dy,w_solid,h_solid)
-    x1,y1 = create_non_stg_solid_particles(n,dx,dy,w_solid,h_solid)
+    x,y = create_stg_solid_particles(n,dx_solid,dy_solid,w_solid,h_solid)
+    x1,y1 = create_non_stg_solid_particles(n,dx_solid,dy_solid,w_solid,h_solid)
 #    print len(x)
 #    print len(y)
 
@@ -403,11 +410,13 @@ def test_create_solid_particles(n=3, dx = 0.12, dy = 0.12, w_solid = 4.0,
 #test_create_solid_particles()
 
 
-def test_create_all_particles(n=3, dx = 0.12, dy = 0.12, w_solid = 4.0,
-                              h_solid = 4.0, w_fluid = 1.0, h_fluid = 2.0, n_dx
-                               = 0.0, n_dy = 0.0):
+def test_create_all_particles(n=3, dx_solid = 0.06, dy_solid = 0.06, 
+                              dx_fluid = 0.12, dy_fluid = 0.12, w_solid = 4.0, 
+                              h_solid = 4.0, w_fluid = 1.0, h_fluid = 2.0, 
+                              n_dx = 0.0, n_dy = 0.0):
 
-    x,y,N_solid,N_fluid = create_all_particles(n,dx,dy,w_solid,h_solid,
+    x,y,N_solid,N_fluid = create_all_particles(n,dx_solid,dy_solid,dx_fluid,
+                                               dy_fluid,w_solid,h_solid,
                                                w_fluid,h_fluid,n_dx,n_dy)
 
     plt.figure()
