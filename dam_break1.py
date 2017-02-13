@@ -209,7 +209,7 @@ def hg_correction(rho):
     return rho
 
 
-def sph_equations(m, rho, p, u, v, x, y, h, N, N_solid, r0, D):
+def sph_equations(m, rho, p, u, v, x, y, h, N, N_solid, c0, r0, D):
     
     rhs_rho = np.zeros(N)   # Use with continuity equation
 #    density = np.zeros(N)    # Use with summation density
@@ -218,9 +218,9 @@ def sph_equations(m, rho, p, u, v, x, y, h, N, N_solid, r0, D):
     rhs_v = np.zeros(N)
     xsph = np.zeros(N)
     ysph = np.zeros(N)
-    c0 = 62.61 #10*u_max
+#    c0 = 10*u_max 
     gamma1 = 0.5*(7.0 -1.0)
-    alpha = 1
+    alpha = 0.1
     beta = 0
 
     for i in range(N):
@@ -290,17 +290,20 @@ def sph_equations(m, rho, p, u, v, x, y, h, N, N_solid, r0, D):
     return rhs_rho,rhs_u,rhs_v,xsph,ysph     # Use with continuity equation
 
 
-def main(n_iter=100, n=3, dx_solid = 0.06, dy_solid = 0.06, dx_fluid = 0.12, 
+def main(n_iter=100, n=2, dx_solid = 0.12, dy_solid = 0.12, dx_fluid = 0.12, 
          dy_fluid = 0.12, w_solid = 4.0, h_solid = 4.0, w_fluid = 1.0, 
          h_fluid = 2.0, n_dx = 0.0, n_dy = 0.0):
              
 #    pdb.set_trace()
 
-    dt = 0.004  #Courant number = 0.3 , u_max = 6.26 yields dt = 0.00575
+    CFL = 0.008
+    u_max = np.sqrt(2*9.8*h_fluid)
+    dt = (CFL*dx_fluid)/u_max  #Courant number = 0.3 , u_max = 6.26 yields dt = 0.00575
+    print 'dt = {}'.format(dt)
     t = n_iter*dt
     time_steps = int(np.ceil(t/dt + 1))
     
-    h = 3.25*max(dx_fluid,dy_fluid)
+    h = 1.3*max(dx_fluid,dy_fluid)
 
     x1,y1,N_solid,N_fluid = create_all_particles(n, dx_solid, dy_solid, 
                                                  dx_fluid, dy_fluid, w_solid, 
@@ -308,6 +311,7 @@ def main(n_iter=100, n=3, dx_solid = 0.06, dy_solid = 0.06, dx_fluid = 0.12,
                                                  n_dx, n_dy)
 
     N = N_solid + N_fluid
+    print 'Total number of particles,N = {}'.format(N)
 
     rho = np.zeros((time_steps,N))
     p = np.zeros((time_steps,N))
@@ -322,13 +326,15 @@ def main(n_iter=100, n=3, dx_solid = 0.06, dy_solid = 0.06, dx_fluid = 0.12,
     rho[0,N_solid:] = 1000.0*np.ones(N_fluid)
     m[:N_solid] = rho[0,0]*dx_solid*dy_solid
     m[N_solid:] = rho[0,-1]*dx_fluid*dy_fluid
-    p[0] = np.ones(N)  #(1.013e5)*
+    p[0] = 1000.*np.ones(N)  #(1.013e5)*
     x[0] = x1
     y[0] = y1
-    B = 560000.0  #1.013e5 # B = (rho_0*c_o**2) /gamma and
+    c0 = 10*u_max
+    gamma = 7.0
+    B = (1000.*c0**2) /gamma  #1.013e5 # B = (rho_0*c_o**2) /gamma and
 #                            c_0 = 10*max(u_max,np.sqrt(gL)) where is L is
 #                            characterisitic vertical dimension of flow
-    gamma = 7.0
+    print 'B = {}'.format(B)
 
 #    pdb.set_trace()
 
@@ -346,7 +352,7 @@ def main(n_iter=100, n=3, dx_solid = 0.06, dy_solid = 0.06, dx_fluid = 0.12,
         rhs_rho, rhs_u, rhs_v, xsph, ysph = sph_equations(m, rho[i-1], p[i-1],
                                                           u[i-1], v[i-1],
                                                           x[i-1], y[i-1], h, N,
-                                                          N_solid, r0, D)
+                                                          N_solid, c0, r0, D)
 
 #        rho[i], rhs_u, rhs_v, xsph, ysph = sph_equations(m, rho[i-1], p[i-1],
 #                                                         u[i-1], v[i-1],
@@ -373,19 +379,23 @@ def plot_res(sol, i=-1):
     plt.plot(x[i,N_solid:],y[i,N_solid:],'b.')
     plt.show()
 
-def plot_res_contour(sol, i=-1):
+def plot_res_contour(sol,sol_index=1,i=-1):
     
     rho,p,u,v,x,y,N_solid = sol
     
     plt.figure()
-    plt.scatter(x[i], y[i], c=rho[i])
-    plt.title('Density_plot')
-    plt.colorbar()
+    plt.scatter(x[i], y[i], c=sol[sol_index][i])
     
-    #plt.figure()
-    #plt.scatter(x[i], y[i], c=p[i])
-    #plt.title('Pressure_plot')
-    #plt.colorbar()
+    if sol_index == 0:
+        plt.title('Density_plot')
+    elif sol_index == 1:
+        plt.title('Pressure_plot')
+    elif sol_index == 2:
+        plt.title('U_plot')
+    elif sol_index == 3:
+        plt.title('V_plot')
+        
+    plt.colorbar()
     
     plt.show()
     
@@ -404,6 +414,11 @@ def plot_res_contour1(sol, i=-1):
     plt.colorbar()
     
     plt.show()
+    
+def plot_res_contour2(sol, i=-1):
+    
+    for j in range(4):
+        plot_res_contour(sol,j,i)
 
 def plot_it(i=-1):
 
@@ -447,7 +462,7 @@ def test_create_solid_particles(n=3, dx_solid = 0.12, dy_solid = 0.12,
 #test_create_solid_particles()
 
 
-def test_create_all_particles(n=3, dx_solid = 0.06, dy_solid = 0.06, 
+def test_create_all_particles(n=2, dx_solid = 0.12, dy_solid = 0.12, 
                               dx_fluid = 0.12, dy_fluid = 0.12, w_solid = 4.0, 
                               h_solid = 4.0, w_fluid = 1.0, h_fluid = 2.0, 
                               n_dx = 0.0, n_dy = 0.0):
@@ -513,4 +528,38 @@ def test_der_kernel(form): # form = "der_spline" or "der_gauss"
 
 
 #test_der_kernel()
+
+def test_der_kernel1(x0,y0,form):
+    
+    x = np.linspace(x0-4,x0 + 4.0 + 1e-7,400)
+    y = np.zeros_like(x)
+    
+    h = 2
+    DWx = np.zeros_like(x)
+    DWy = np.zeros_like(x)
+    
+    for i in range(len(x)):
+        
+        DWx[i],DWy[i] = derivative_kernel(x[i],x0,y[i],0.0,h,form)
+    
+    plt.figure()
+    plt.plot(x,DWx)
+    plt.title('DWx vs x')
+    plt.show()
+    
+    y = np.linspace(y0-4,y0 + 4.0 + 1e-7,400)
+    x = np.zeros_like(y)
+    
+    h = 2
+    DWx = np.zeros_like(x)
+    DWy = np.zeros_like(x)
+    
+    for i in range(len(x)):
+        
+        DWy[i],DWy[i] = derivative_kernel(x[i],0.0,y[i],y0,h,form)
+    
+    plt.figure()
+    plt.plot(y,DWy)
+    plt.title('DWy vs y')
+    plt.show()
 
