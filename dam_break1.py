@@ -418,7 +418,7 @@ def plot_res_contour1(sol, i=-1):
 def plot_res_contour2(sol, i=-1):
     
     for j in range(4):
-        plot_res_contour(sol,j,i)
+        plot_res_contour(sol,j,i=i)
 
 def plot_it(i=-1):
 
